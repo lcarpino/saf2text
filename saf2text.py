@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+from collections import namedtuple
 import xml.etree.ElementTree as ET
 
 # saf are xml from MA5
@@ -12,11 +13,8 @@ with open(test) as f:
     xml = f.read()
 root = ET.fromstring("<root>" + xml + "</root>")
 
-for child in root:
-    print(child.tag, child.attrib)
-
+# test for a single histogram
 hist1 = root[2]
-print(hist1.tag)
 
 # structure of histogram
 
@@ -25,37 +23,58 @@ print(hist1.tag)
 #   statistics
 #   data
 
-# this is data
-print(hist1[2].text)
+# simple container for data we want
+safhisto = namedtuple("saf_histogram", "obs, bins, xsec")
 
-# lines
-# print(hist1[2].text.strip().split("\n"))
-ldata = hist1[2].text.strip().split("\n")
+def histo(histtree):
+    """"""
+    des, stat, dat = histtree
 
-# data from hist 1
-hist = []
-for line in ldata:
-    ld = line.split(" ")[0]
-    hist.append(ld)
+    obs_name, bins = description(des)
+    stat = statistics(stat)
+    uflow, bdata, oflow = data(dat)
 
-# now get bins
+    # return obs_name, bins, bdata
+    return safhisto(obs_name, bins, bdata)
 
-bdata = hist1[0].text.strip().split("\n")
+def description(elem):
+    """"""
+    obs, _, binning, *other = elem.text.strip().split("\n")
 
-# line 3 is the important one...
-bdata = bdata[2].split()
+    nbins, xmin, xmax = binning.split()
+    # cast to appropriate form
+    nbins = int(nbins)
+    xmin = float(xmin)
+    xmax = float(xmax)
 
-# bin midpoint
-nbins, xmin, xmax = map(float, bdata)
-binsize  = (xmax - xmin)/nbins
-bins = [xmin + binsize*(n+1/2) for n in range(int(nbins))]
+    binsize = (xmax - xmin)/nbins
+    bins = [xmin + binsize*(n+1/2) for n in range(int(nbins))]
 
-for bin, dat in zip(bins, hist):
-    print(bin, dat)
+    return obs, bins
 
-with open("hist.dat", "w") as f:
-    for bin, dat in zip(bins, hist[1:]):
-        f.write(str(bin))
-        f.write("  ")
-        f.write(str(dat))
+def statistics(elem):
+    pass
+
+def data(elem):
+    """"""
+    hdata = elem.text.strip().split("\n")
+    uflow, *bdata, oflow = [float(line.split(" ")[0]) for line in hdata]
+
+    return uflow, bdata, oflow
+
+# for elem in [elem for elem in root if elem.tag == "Histo"]:
+    # print(histo(elem))
+
+h = histo(root[2])
+
+with open("hist", "w") as f:
+    # write header
+    f.write("# " + h.obs)
+    f.write("\n")
+    f.write("# bins  xsec")
+    f.write("\n")
+
+    # write data
+    for bin, dat in zip(h.bins, h.xsec):
+        f.write(str(bin) + "  " + str(dat))
         f.write("\n")
