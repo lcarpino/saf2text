@@ -15,7 +15,7 @@ root = ET.fromstring("<root>" + xml + "</root>")
 for child in root:
     print(child.tag, child.attrib)
 
-hist1 = root[1]
+hist1 = root[2]
 print(hist1.tag)
 
 # structure of histogram
@@ -45,9 +45,17 @@ bdata = hist1[0].text.strip().split("\n")
 # line 3 is the important one...
 bdata = bdata[2].split()
 
+# bin midpoint
 nbins, xmin, xmax = map(float, bdata)
 binsize  = (xmax - xmin)/nbins
-bins = [xmin + binsize*n for n in range(int(nbins))]
+bins = [xmin + binsize*(n+1/2) for n in range(int(nbins))]
 
 for bin, dat in zip(bins, hist):
     print(bin, dat)
+
+with open("hist.dat", "w") as f:
+    for bin, dat in zip(bins, hist[1:]):
+        f.write(str(bin))
+        f.write("  ")
+        f.write(str(dat))
+        f.write("\n")
