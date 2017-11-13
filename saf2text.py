@@ -2,16 +2,50 @@
 
 from collections import namedtuple
 import xml.etree.ElementTree as ET
+import argparse
 
 # saf are xml from MA5
 # convert to text for gnuplot and generic plotting programs
 
-# hardcode test
-test = "/home/luke/Documents/Physics/Research/saf2text/test/histos.saf"
+# parser
+parser = argparse.ArgumentParser(description="create a run file from a \
+           directory containing input files")
 
-with open(test) as f:
-    xml = f.read()
-root = ET.fromstring("<root>" + xml + "</root>")
+parser.add_argument('input',
+                    type=str,
+                    action='store',
+                    help="saf file to process")
+parser.add_argument('-o', '--output',
+                    dest='output',
+                    type=str,
+                    action='store',
+                    help="currently unimplemented")
+parser.add_argument('-x', '--xsec',
+                    type=float,
+                    action='store',
+                    default=1.0,
+                    help="Parton level cross section to be used in scaling")
+parser.add_argument('-n', '--nevents',
+                    type=int,
+                    action='store',
+                    default=1,
+                    help="Number of events to be used in scaling")
+parser.add_argument('-b', '--rebin',
+                    action='store_true',
+                    help="""Should the bins be scaled so they integrate to the
+                    total cross section""")
+parser.add_argument('--fb',
+                    action='store_true',
+                    help="""Convert final cross section into fb from pb""")
+
+args = parser.parse_args()
+
+# hardcode test
+# test = "/home/luke/Documents/Physics/Research/saf2text/test/histos.saf"
+
+# with open(test) as f:
+    # xml = f.read()
+# root = ET.fromstring("<root>" + xml + "</root>")
 
 # simple container for data we want
 class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
@@ -33,7 +67,7 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
 #   statistics
 #   data
 
-def histo(histtree, sigma=1., nevents=1, rebin=False):
+def histo(histtree, sigma=1., nevents=1, rebin=False, fb=False):
     """"""
     des, stat, dat = histtree
 
@@ -45,6 +79,9 @@ def histo(histtree, sigma=1., nevents=1, rebin=False):
     rescale = sigma/nevents
     if rebin:
         rescale = rescale / binsize
+    if fb:
+        # conversion factor for pb -> fb
+        rescale = rescale * 1000.
 
     bdata = [dat * rescale for dat in bdata]
 
@@ -90,14 +127,15 @@ def data(elem):
 
     return uflow, bdata, oflow
 
-# blocks of dependent params from MA5 and MG5
-sigma = 0.0
-nevents = 50000
 
 if __name__ == "__main__":
 
+    # 
+    with open(args.input, "r") as f:
+        xml = f.read()
+    root = ET.fromstring("<root>" + xml + "</root>")
+
     for enum, hist_elem in enumerate([elem for elem in root if elem.tag == "Histo"]):
-        histogram = histo(hist_elem)
-        print(histogram)
+        histogram = histo(hist_elem, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb)
         with open("histogram-" + histogram.obs, "w") as f:
             f.write(str(histogram))
