@@ -4,7 +4,7 @@ from collections import namedtuple
 import xml.etree.ElementTree as ET
 
 # saf are xml from MA5
-# convert to text for gnuplot
+# convert to text for gnuplot and generic plotting programs
 
 # hardcode test
 test = "/home/luke/Documents/Physics/Research/saf2text/test/histos.saf"
@@ -13,16 +13,6 @@ with open(test) as f:
     xml = f.read()
 root = ET.fromstring("<root>" + xml + "</root>")
 
-# test for a single histogram
-hist1 = root[2]
-
-# structure of histogram
-
-# histogram
-#   description
-#   statistics
-#   data
-
 # simple container for data we want
 class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
     def __str__(self):
@@ -30,12 +20,18 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
         pretty_histo = "# " + self.obs + "\n"
         pretty_histo += "# {}    {}\n".format("binmid [GeV]", "xsec [pb]")
 
+        # body
         for bin, xsec in zip(self.bins, self.xsec):
             pretty_histo += "{:6.1f}    {:G}\n".format(bin, xsec)
 
         return pretty_histo
 
-# safhisto = namedtuple("saf_histogram", "obs, bins, xsec")
+# structure of histogram
+
+# histogram
+#   description
+#   statistics
+#   data
 
 def histo(histtree):
     """"""
@@ -72,21 +68,6 @@ def data(elem):
     uflow, *bdata, oflow = [float(line.split(" ")[0]) for line in hdata]
 
     return uflow, bdata, oflow
-
-# for elem in [elem for elem in root if elem.tag == "Histo"]:
-    # print(histo(elem))
-
-# with open("hist", "w") as f:
-#     # write header
-#     f.write("# " + h.obs)
-#     f.write("\n")
-#     f.write("# bins  xsec")
-#     f.write("\n")
-
-#     # write data
-#     for bin, dat in zip(h.bins, h.xsec):
-#         f.write(str(bin) + "  " + str(dat))
-#         f.write("\n")
 
 for enum, hist_elem in enumerate([elem for elem in root if elem.tag == "Histo"]):
     histogram = histo(hist_elem)
