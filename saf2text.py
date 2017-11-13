@@ -44,10 +44,15 @@ def histo(histtree):
     # return obs_name, bins, bdata
     return safhisto(obs_name, bins, bdata)
 
-def description(elem):
+def description(elem, bin_alignment="mid"):
     """"""
     obs, _, binning, *other = elem.text.strip().split("\n")
 
+    # observable cleanup
+    obs = obs.strip("\"")
+    obs = obs.strip("\'")
+
+    # binning
     nbins, xmin, xmax = binning.split()
     # cast to appropriate form
     nbins = int(nbins)
@@ -55,7 +60,16 @@ def description(elem):
     xmax = float(xmax)
 
     binsize = (xmax - xmin)/nbins
-    bins = [xmin + binsize*(n+1/2) for n in range(nbins)]
+    if bin_alignment == "left":
+        bin_fn = lambda x: x
+    elif bin_alignment == "mid":
+        bin_fn = lambda x: x+1/2
+    elif bin_alignment == "right":
+        bin_fn = lambda x: x+1
+    else:
+        pass
+
+    bins = [xmin + binsize*bin_fn(n) for n in range(nbins)]
 
     return obs, bins
 
@@ -69,7 +83,10 @@ def data(elem):
 
     return uflow, bdata, oflow
 
-for enum, hist_elem in enumerate([elem for elem in root if elem.tag == "Histo"]):
-    histogram = histo(hist_elem)
-    with open("histogram-" + histogram.obs, "w") as f:
-        f.write(str(histogram))
+if __name__ == "__main__":
+
+    for enum, hist_elem in enumerate([elem for elem in root if elem.tag == "Histo"]):
+        histogram = histo(hist_elem)
+        print(histogram)
+        with open("histogram-" + histogram.obs, "w") as f:
+            f.write(str(histogram))
