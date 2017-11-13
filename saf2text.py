@@ -22,7 +22,7 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
 
         # body
         for bin, xsec in zip(self.bins, self.xsec):
-            pretty_histo += "{:6.1f}    {:G}\n".format(bin, xsec)
+            pretty_histo += "{:6.1f}    {:12.14f}\n".format(bin, xsec)
 
         return pretty_histo
 
@@ -33,13 +33,20 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
 #   statistics
 #   data
 
-def histo(histtree):
+def histo(histtree, sigma=1., nevents=1, rebin=False):
     """"""
     des, stat, dat = histtree
 
-    obs_name, bins = description(des)
+    obs_name, bins, binsize = description(des)
     stat = statistics(stat)
     uflow, bdata, oflow = data(dat)
+
+    # rescale bdata
+    rescale = sigma/nevents
+    if rebin:
+        rescale = rescale / binsize
+
+    bdata = [dat * rescale for dat in bdata]
 
     # return obs_name, bins, bdata
     return safhisto(obs_name, bins, bdata)
@@ -71,7 +78,7 @@ def description(elem, bin_alignment="mid"):
 
     bins = [xmin + binsize*bin_fn(n) for n in range(nbins)]
 
-    return obs, bins
+    return obs, bins, binsize
 
 def statistics(elem):
     pass
@@ -82,6 +89,10 @@ def data(elem):
     uflow, *bdata, oflow = [float(line.split(" ")[0]) for line in hdata]
 
     return uflow, bdata, oflow
+
+# blocks of dependent params from MA5 and MG5
+sigma = 0.0
+nevents = 50000
 
 if __name__ == "__main__":
 
