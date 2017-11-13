@@ -24,7 +24,18 @@ hist1 = root[2]
 #   data
 
 # simple container for data we want
-safhisto = namedtuple("saf_histogram", "obs, bins, xsec")
+class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
+    def __str__(self):
+        # header
+        pretty_histo = "# " + self.obs + "\n"
+        pretty_histo += "# {}    {}\n".format("binmid [GeV]", "xsec [pb]")
+
+        for bin, xsec in zip(self.bins, self.xsec):
+            pretty_histo += "{:6.1f}    {:G}\n".format(bin, xsec)
+
+        return pretty_histo
+
+# safhisto = namedtuple("saf_histogram", "obs, bins, xsec")
 
 def histo(histtree):
     """"""
@@ -48,7 +59,7 @@ def description(elem):
     xmax = float(xmax)
 
     binsize = (xmax - xmin)/nbins
-    bins = [xmin + binsize*(n+1/2) for n in range(int(nbins))]
+    bins = [xmin + binsize*(n+1/2) for n in range(nbins)]
 
     return obs, bins
 
@@ -65,16 +76,19 @@ def data(elem):
 # for elem in [elem for elem in root if elem.tag == "Histo"]:
     # print(histo(elem))
 
-h = histo(root[2])
+# with open("hist", "w") as f:
+#     # write header
+#     f.write("# " + h.obs)
+#     f.write("\n")
+#     f.write("# bins  xsec")
+#     f.write("\n")
 
-with open("hist", "w") as f:
-    # write header
-    f.write("# " + h.obs)
-    f.write("\n")
-    f.write("# bins  xsec")
-    f.write("\n")
+#     # write data
+#     for bin, dat in zip(h.bins, h.xsec):
+#         f.write(str(bin) + "  " + str(dat))
+#         f.write("\n")
 
-    # write data
-    for bin, dat in zip(h.bins, h.xsec):
-        f.write(str(bin) + "  " + str(dat))
-        f.write("\n")
+for enum, hist_elem in enumerate([elem for elem in root if elem.tag == "Histo"]):
+    histogram = histo(hist_elem)
+    with open("histogram-" + histogram.obs, "w") as f:
+        f.write(str(histogram))
