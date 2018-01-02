@@ -1,6 +1,8 @@
 #! /usr/bin/env python3
 
 from collections import namedtuple
+from operator import sub
+from functools import reduce
 import xml.etree.ElementTree as ET
 import argparse
 
@@ -122,8 +124,15 @@ def statistics(elem):
 
 def data(elem):
     """"""
-    hdata = elem.text.strip().split("\n")
-    uflow, *bdata, oflow = [float(line.split(" ")[0]) for line in hdata]
+    hline = elem.text.strip().split("\n")
+
+    # handle saf with negative event weights
+    try:
+        hdata = [reduce(sub, map(float, line.split(" ")[:2])) for line in hline]
+    except:
+        hdata = [float(line.split(" ")[:1]) for line in hline]
+
+    uflow, *bdata, oflow = hdata
 
     return uflow, bdata, oflow
 
