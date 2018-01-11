@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 
 from collections import namedtuple
-from operator import sub
-from functools import reduce
+from operator import add, sub
+from functools import partial, reduce
 import xml.etree.ElementTree as ET
 import argparse
 
@@ -14,9 +14,11 @@ parser = argparse.ArgumentParser(description="create a run file from a \
            directory containing input files")
 
 parser.add_argument('input',
+                    metavar='input(s)',
                     type=str,
                     action='store',
-                    help="saf file to process")
+                    nargs='+',
+                    help="saf file(s) to process")
 parser.add_argument('-o', '--output',
                     dest='output',
                     type=str,
@@ -32,21 +34,23 @@ parser.add_argument('-n', '--nevents',
                     action='store',
                     default=1,
                     help="Number of events to be used in scaling")
+parser.add_argument('--avg',
+                    action='store_true',
+                    help="""Average over the input files""")
 parser.add_argument('-b', '--rebin',
                     action='store_true',
-                    help="""Should the bins be scaled so they integrate to the
+                    help="""Rescale the bins so that they integrate to the
                     total cross section""")
 parser.add_argument('--fb',
                     action='store_true',
                     help="""Convert final cross section into fb from pb""")
 
-args = parser.parse_args()
 
 # hardcode test
 # test = "/home/luke/Documents/Physics/Research/saf2text/test/histos.saf"
 
 # with open(test) as f:
-    # xml = f.read()
+# xml = f.read()
 # root = ET.fromstring("<root>" + xml + "</root>")
 
 # simple container for data we want
@@ -62,6 +66,12 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
 
         return pretty_histo
 
+    def __add__(self, other):
+        assert self.obs == other.obs
+        assert self.bins == other.bins
+        wts = tuple([(x + y) for x, y in zip(self.xsec, other.xsec)])
+        return safhisto(self.obs, self.bins, wts)
+
 # structure of histogram
 
 # histogram
@@ -69,7 +79,7 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
 #   statistics
 #   data
 
-def histo(histtree, sigma=1., nevents=1, rebin=False, fb=False):
+def histo(histtree, sigma, nevents, rebin, fb):
     """"""
     des, stat, dat = histtree
 
@@ -137,14 +147,40 @@ def data(elem):
     return uflow, bdata, oflow
 
 
+def readsaf(input):
+    """Helper function to read and process saf files
+    (saf's are badly formatted xml so need this hack)"""
+    with open(input, 'r') as f:
+        saf = f.read()
+
+    return ET.fromstring("<root>" + saf + "</root>")
+
+def saf2hist(saf, sigma, nevents, rebin, fb):
+    """takes a well formatted saf from readsaf and converts it into the
+    appropriate histograms"""
+    histlist = []
+    for enum, hist_elem in enumerate([elem for elem in saf if elem.tag == "Histo"]):
+        histlist.append(histo(hist_elem, sigma, nevents, rebin, fb))
+    return histlist
+
 if __name__ == "__main__":
 
-    # 
-    with open(args.input, "r") as f:
-        xml = f.read()
-    root = ET.fromstring("<root>" + xml + "</root>")
+    args = parser.parse_args()
+    ninputs = len(args.input)
 
-    for enum, hist_elem in enumerate([elem for elem in root if elem.tag == "Histo"]):
-        histogram = histo(hist_elem, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb)
-        with open("histogram-" + histogram.obs, "w") as f:
-            f.write(str(histogram))
+    # get safs in list
+    safs = [readsaf(insaf) for insaf in args.input]
+
+    # get nested list of all histograms
+    all_histos = map(partial(saf2hist, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb), safs)
+    # transpose for reduce call
+    all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
+    # Add together histograms with like observables
+    histos = [reduce(add, hist) for hist in all_histos_tp]
+
+    if args.avg:
+        histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
+
+    for hist in histos:
+        with open("histogram-" + hist.obs, "w") as f:
+            f.write(str(hist))
