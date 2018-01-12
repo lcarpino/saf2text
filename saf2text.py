@@ -153,7 +153,8 @@ def data(elem):
 def readsaf(input):
     """Helper function to read and process saf files
     (saf's are badly formatted xml so need this hack)"""
-    with open(input, 'r') as f:
+    # fix to make path objects work in Python3.5
+    with open(str(input), 'r') as f:
         saf = f.read()
 
     return ET.fromstring("<root>" + saf + "</root>")
