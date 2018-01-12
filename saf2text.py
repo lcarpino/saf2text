@@ -23,7 +23,9 @@ parser.add_argument('-o', '--output',
                     dest='output',
                     type=str,
                     action='store',
-                    help="currently unimplemented")
+                    default='histogram',
+                    help="""The prefix that is attached at the start of the
+                    output filename""")
 parser.add_argument('-x', '--xsec',
                     type=float,
                     action='store',
@@ -182,5 +184,5 @@ if __name__ == "__main__":
         histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
 
     for hist in histos:
-        with open("histogram-" + hist.obs, "w") as f:
+        with open(str(args.output) + "-" + hist.obs, "w") as f:
             f.write(str(hist))
