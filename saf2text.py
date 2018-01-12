@@ -3,6 +3,7 @@
 from collections import namedtuple
 from operator import add, sub
 from functools import partial, reduce
+from pathlib import Path
 import xml.etree.ElementTree as ET
 import argparse
 
@@ -168,17 +169,26 @@ def saf2hist(saf, sigma, nevents, rebin, fb):
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    ninputs = len(args.input)
+    # ninputs = len(args.input)
+
+    # process inputs (let us use fuzzy inputs)
+    inputs = [Path(path) for path in args.input if Path(path).exists()]
+    ninputs = len(inputs)
 
     # get safs in list
-    safs = [readsaf(insaf) for insaf in args.input]
+    safs = [readsaf(insaf) for insaf in inputs]
 
-    # get nested list of all histograms
-    all_histos = map(partial(saf2hist, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb), safs)
-    # transpose for reduce call
-    all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
-    # Add together histograms with like observables
-    histos = [reduce(add, hist) for hist in all_histos_tp]
+    # this is the fuzzy logic, try and do stuff as normal, however call
+    # program exit if there are no valid inputs
+    try:
+        # get nested list of all histograms
+        all_histos = map(partial(saf2hist, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb), safs)
+        # transpose for reduce call
+        all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
+        # Add together histograms with like observables
+        histos = [reduce(add, hist) for hist in all_histos_tp]
+    except:
+        exit()
 
     if args.avg:
         histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
