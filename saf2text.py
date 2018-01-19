@@ -8,18 +8,19 @@ import xml.etree.ElementTree as ET
 import argparse
 
 # saf are xml from MA5
-# convert to text for gnuplot and generic plotting programs
+# convert to text for gnuplot and/or other generic plotting programs
 
 # parser
-parser = argparse.ArgumentParser(description="create a run file from a \
-           directory containing input files")
+parser = argparse.ArgumentParser(description="""Covert a Histo.saf file from
+MadAnalysis into a set of plain text Histograms for use in an external plotting
+program such as gnuplot.""")
 
 parser.add_argument('input',
                     metavar='input(s)',
                     type=str,
                     action='store',
                     nargs='+',
-                    help="saf file(s) to process")
+                    help=".saf file(s) to be processed")
 parser.add_argument('-o', '--output',
                     dest='output',
                     type=str,
@@ -31,57 +32,58 @@ parser.add_argument('-x', '--xsec',
                     type=float,
                     action='store',
                     default=1.0,
-                    help="Parton level cross section to be used in scaling")
+                    help="""Parton level cross section to be used to normalise
+                    an unweighted histogram""")
 parser.add_argument('-n', '--nevents',
                     type=int,
                     action='store',
                     default=1,
-                    help="Number of events to be used in scaling")
+                    help="""Number of events to be used to normalise an
+                    unweighted histogram""")
 parser.add_argument('--avg',
                     action='store_true',
-                    help="""Average over the input files""")
-parser.add_argument('-b', '--rebin',
+                    help="""Average over the input files, i.e. report
+                    histograms as sum over inputs divide the number of inputs.
+                    One should use this if runs were performed in parallel, but
+                    with the same setup""")
+parser.add_argument('--rebin',
                     action='store_true',
                     help="""Rescale the bins so that they integrate to the
-                    total cross section""")
+                    total cross section rather than the default sum. This is
+                    equivalent to converting from nevents/bin to pb/bin""")
 parser.add_argument('--fb',
                     action='store_true',
                     help="""Convert final cross section into fb from pb""")
 
 
-# hardcode test
-# test = "/home/luke/Documents/Physics/Research/saf2text/test/histos.saf"
-
-# with open(test) as f:
-# xml = f.read()
-# root = ET.fromstring("<root>" + xml + "</root>")
-
-# simple container for data we want
+# simple container for the histogram data that we want,
+# supports addition of histograms
 class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
     def __str__(self):
-        # header
-        pretty_histo = "# " + self.obs + "\n"
-        pretty_histo += "# {}    {}\n".format("binmid [GeV]", "xsec [pb]")
-
-        # body
+        pretty_histo = ""
         for bin, xsec in zip(self.bins, self.xsec):
             pretty_histo += "{:6.1f}    {:12.14f}\n".format(bin, xsec)
 
         return pretty_histo
 
     def __add__(self, other):
+        # it doesn't make sense to add histograms of different observables
+        # or that have different numbers of bins, what is the consistent way
+        # to handle these extra bins?
         assert self.obs == other.obs
         assert self.bins == other.bins
         wts = tuple([(x + y) for x, y in zip(self.xsec, other.xsec)])
         return safhisto(self.obs, self.bins, wts)
 
-# structure of histogram
 
+# structure of histogram output from MadAnalysis
 # histogram
 #   description
 #   statistics
 #   data
 
+# routines to process saf files and return safhisto objects
+# containing the data in plaintext
 def histo(histtree, sigma, nevents, rebin, fb):
     """"""
     des, stat, dat = histtree
@@ -100,7 +102,6 @@ def histo(histtree, sigma, nevents, rebin, fb):
 
     bdata = [dat * rescale for dat in bdata]
 
-    # return obs_name, bins, bdata
     return safhisto(obs_name, bins, bdata)
 
 def description(elem, bin_alignment="mid"):
@@ -139,10 +140,11 @@ def data(elem):
     """"""
     hline = elem.text.strip().split("\n")
 
-    # handle saf with negative event weights
     try:
+    # handle negative event weights in histogram
         hdata = [reduce(sub, map(float, line.split(" ")[:2])) for line in hline]
     except:
+    # usual case, just positive weights
         hdata = [float(line.split(" ")[:1]) for line in hline]
 
     uflow, *bdata, oflow = hdata
@@ -150,13 +152,13 @@ def data(elem):
     return uflow, bdata, oflow
 
 
+# helper functions
 def readsaf(input):
     """Helper function to read and process saf files
     (saf's are badly formatted xml so need this hack)"""
-    # fix to make path objects work in Python3.5
+    # fix to make path objects work in Python3.5, not needed in 3.6+
     with open(str(input), 'r') as f:
         saf = f.read()
-
     return ET.fromstring("<root>" + saf + "</root>")
 
 def saf2hist(saf, sigma, nevents, rebin, fb):
@@ -167,12 +169,13 @@ def saf2hist(saf, sigma, nevents, rebin, fb):
         histlist.append(histo(hist_elem, sigma, nevents, rebin, fb))
     return histlist
 
+
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    # ninputs = len(args.input)
 
-    # process inputs (let us use fuzzy inputs)
+    # process inputs, it will let you choose paths that don't exist and
+    # continue quietly
     inputs = [Path(path) for path in args.input if Path(path).exists()]
     ninputs = len(inputs)
 
