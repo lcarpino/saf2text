@@ -15,6 +15,14 @@ parser = argparse.ArgumentParser(description="""Covert a Histo.saf file from
 MadAnalysis into a set of plain text Histograms for use in an external plotting
 program such as gnuplot.""")
 
+parser.add_argument('-e', '--extended',
+                    dest='extended',
+                    action='store_true',
+                    help="""Use extended options. Pass the saf folders rather
+                    than the files i.e. ANALYSIS_NAME. This is needed if the
+                    showering program does not support IDWTUP = -4 or this
+                    option has not been used in the sample passed to
+                    MadAnalysis.""")
 parser.add_argument('input',
                     metavar='input(s)',
                     type=str,
@@ -152,6 +160,54 @@ def data(elem):
     return uflow, bdata, oflow
 
 
+# functions to process folder
+
+def handle_ma5_out(path):
+
+    # structure of folder
+
+    # ma5_input_name
+    #  ma5_input_name.saf
+    #  analysis_name_0
+    #    analysis_name.saf
+    #    Cutflows
+    #      cut_name.saf  # names in analysis_name.saf with "-" -> "_"
+    #       .
+    #       .
+    #      cut_name.saf
+    #    Histograms
+    #      histos.saf
+    #  analysis_name_1
+    #    .
+    #    .
+    #  analysis_name_n
+
+    # ma5_input_name
+    ma5_in = path.name
+    global_info = (path / ma5_in).with_suffix(".saf")
+
+    # analysis_names
+    analyses = [child for child in path.iterdir() if child.is_dir()]
+    analysis_names = ["_".join(str(analysis.name).split('_')[:-1]) for analysis in analyses]
+
+    # analysis names should all be the same, but check anyway
+    if len(set(analysis_names)) != 1:
+        exit()
+    else:
+        analysis = max(analyses)
+        analysis_name = set(analysis_names).pop()
+
+    # analysis_name.saf
+    region_selection = (analysis / analysis_name).with_suffix(".saf")
+
+    # Cutflows
+    cutflows = [child for child in (analysis / "Cutflows").iterdir()]
+
+    # Histograms
+    histograms = (analysis / "Histograms" / "histos").with_suffix(".saf")
+
+    return global_info, region_selection, cutflows, histograms
+
 # helper functions
 def readsaf(input):
     """Helper function to read and process saf files
@@ -174,29 +230,33 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # process inputs, it will let you choose paths that don't exist and
-    # continue quietly
-    inputs = [Path(path) for path in args.input if Path(path).exists()]
-    ninputs = len(inputs)
+    # # process inputs, it will let you choose paths that don't exist and
+    # # continue quietly
+    # inputs = [Path(path) for path in args.input if Path(path).exists()]
+    # ninputs = len(inputs)
 
-    # get safs in list
-    safs = [readsaf(insaf) for insaf in inputs]
+    # # get safs in list
+    # safs = [readsaf(insaf) for insaf in inputs]
 
-    # this is the fuzzy logic, try and do stuff as normal, however call
-    # program exit if there are no valid inputs
-    try:
-        # get nested list of all histograms
-        all_histos = map(partial(saf2hist, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb), safs)
-        # transpose for reduce call
-        all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
-        # Add together histograms with like observables
-        histos = [reduce(add, hist) for hist in all_histos_tp]
-    except:
-        exit()
+    # # this is the fuzzy logic, try and do stuff as normal, however call
+    # # program exit if there are no valid inputs
+    # try:
+    #     # get nested list of all histograms
+    #     all_histos = map(partial(saf2hist, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb), safs)
+    #     # transpose for reduce call
+    #     all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
+    #     # Add together histograms with like observables
+    #     histos = [reduce(add, hist) for hist in all_histos_tp]
+    # except:
+    #     exit()
 
-    if args.avg:
-        histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
+    # if args.avg:
+    #     histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
 
-    for hist in histos:
-        with open(str(args.output) + "-" + hist.obs, "w") as f:
-            f.write(str(hist))
+    # for hist in histos:
+    #     with open(str(args.output) + "-" + hist.obs, "w") as f:
+    #         f.write(str(hist))
+
+    handle_ma5_out(Path("/home/luke/Documents/Physics/Research/saf2text/0001"))
+
+    pass
