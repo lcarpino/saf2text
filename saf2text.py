@@ -208,6 +208,44 @@ def handle_ma5_out(path):
 
     return global_info, region_selection, cutflows, histograms
 
+def global_info(path):
+    global_info_xml = readsaf(path)
+
+    saf_header, sample, saf_footer = global_info_xml
+    sample_info = list(map(lambda s : s.strip("#").split(), sample.text.strip().split("\n")))
+    sample_titles = sample_info[0]
+    sample_data = map(lambda x, y : x(y), [float, float, int, float, float], sample_info[1])
+
+    xsec, xsec_err, nevents, sum_poswt, sum_negwt = list(sample_data)
+
+    return xsec, xsec_err, nevents, sum_poswt, sum_negwt
+
+def region_selection(path):
+    region_selection_xml = readsaf(path)
+
+    saf_header, regions, saf_footer = region_selection_xml
+    region_names = map(lambda s : s.strip("\"").replace("-", "_"), regions.text.split())
+
+    return region_names
+
+def cutflow(path):
+    cutflow = readsaf(path)
+
+    saf_header, initial_counter, *counters, saf_footer = cutflow 
+    title, *initial_data = initial_counter.text.strip().split("\n")
+    
+    title = title.split('#')[0].strip().strip("\"")
+
+    nentries, wt, wt2 = map(lambda x : x.split("#")[0].split(), initial_data)
+    nentries = map(int, nentries)
+    wt = map(float, wt)
+    wt2 = map(float, wt2)
+
+    num_poswt, num_negwt = nentries
+
+    return nentries, wt, wt2
+
+
 # helper functions
 def readsaf(input):
     """Helper function to read and process saf files
@@ -257,6 +295,11 @@ if __name__ == "__main__":
     #     with open(str(args.output) + "-" + hist.obs, "w") as f:
     #         f.write(str(hist))
 
-    handle_ma5_out(Path("/home/luke/Documents/Physics/Research/saf2text/0001"))
+    gl, rs, cf, h = handle_ma5_out(Path("/home/luke/Documents/Physics/Research/saf2text/0001"))
+
+    global_info(gl)
+    region_selection(rs)
+    print(list(region_selection(rs)))
+    cutflow(cf[0])
 
     pass
