@@ -62,7 +62,7 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
     def __str__(self):
         pretty_histo = ""
         for bin, xsec in zip(self.bins, self.xsec):
-            pretty_histo += "{:6.1f}    {:12.14f}\n".format(bin, xsec)
+            pretty_histo += "{:08.3f}\t{:014.10f}\n".format(bin, xsec)
 
         return pretty_histo
 
