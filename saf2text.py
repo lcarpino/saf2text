@@ -4,6 +4,7 @@ from collections import namedtuple
 from operator import add, sub
 from functools import partial, reduce
 import itertools
+import numbers
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import argparse
@@ -290,23 +291,24 @@ def main(inputs, event_wt, rebin, fb):
     return histos
 
 def main_extended(inputs, event_wts, rebin, fb):
-    # get safs in list
     safs = [readsaf(insaf) for insaf in inputs]
 
-    # this is the fuzzy logic, try and do stuff as normal, however call
-    # program exit if there are no valid inputs
+    if isinstance(event_wts, numbers.Real):
+        # stuff for the old way
+        fns = itertools.repeat(partial(saf2hist, event_wt=event_wts, rebin=rebin, fb=fb))
+    elif isinstance(event_wts, list):
+        # stuff for the extended version
+        fns = map(lambda it : partial(saf2hist, event_wt=it, rebin=rebin, fb=fb), event_wts)
+    else:
+        return NotImplemented
+
     try:
         # get nested list of all histograms
-        fns = map(lambda it : partial(saf2hist, event_wt=it, rebin=rebin, fb=fb), event_wts)
         all_histos = map(lambda x, y: x(y) , fns, safs)
-        # transpose for reduce call
-        all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
-        # Add together histograms with like observables
-        histos = [reduce(add, hist) for hist in all_histos_tp]
     except:
         exit()
 
-    return histos
+    return all_histos
 
 if __name__ == "__main__":
 
@@ -327,9 +329,16 @@ if __name__ == "__main__":
         cutflow_sample = map(lambda r, cf : next(filter(lambda p : p.stem == r, cf)), first_region, cfs) 
         nentries, wt, wt2 = zip(*map(cutflow, cutflow_sample))
 
-        net_nevents = map(lambda it : reduce(sub, it), nentries)
+        net_nevents = list(map(lambda it : reduce(sub, it), nentries))
+
+        # perform rescaling
         rescale_nevents = [0.0 if den == 0.0 else num/den for num, den in zip(nevents, net_nevents)]
-        rescale = [xsec/nevents*scale for xsec, nevents, scale in zip(xsec, nevents, rescale_nevents)]
+        # determine if nevents and xsec are needed for rescaling
+        wt_test = list(map(lambda x : int(sum(x)), wt))
+        if net_nevents == wt_test:
+            rescale = [xsec/nevents*scale for xsec, nevents, scale in zip(xsec, nevents, rescale_nevents)]
+        else:
+            rescale = rescale_nevents
 
         histos = main_extended(hist, rescale, args.rebin, args.fb)
 
@@ -338,6 +347,11 @@ if __name__ == "__main__":
             tot_evts = sum(nevents)
             avg_wts = [nevts/tot_evts for nevts in nevents]
             # histos = [safhisto(hist.obs, hist.bins, [xsec*avg_wt for xsec in hist.xsec]) for hist, avg_wt in zip(histos, avg_wts)]
+            histos = [[safhisto(hist.obs, hist.bins, [xsec*avg_wt for xsec in hist.xsec]) for hist in hist_dir]
+                      for hist_dir, avg_wt in zip(histos, avg_wts)]
+
+        histos_tp = map(lambda *sl : list(sl), *histos)
+        histos = [reduce(add, hist) for hist in histos_tp]
 
     else:
         inputs = [Path(path) for path in args.input if Path(path).exists()]
