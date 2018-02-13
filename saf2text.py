@@ -336,7 +336,7 @@ if __name__ == "__main__":
         # determine if nevents and xsec are needed for rescaling
         wt_test = list(map(lambda x : int(sum(x)), wt))
         if net_nevents == wt_test:
-            rescale = [xsec/nevents*scale for xsec, nevents, scale in zip(xsec, nevents, rescale_nevents)]
+            rescale = [0.0 if nevents == 0.0 else xsec/nevents*scale for xsec, nevents, scale in zip(xsec, nevents, rescale_nevents)]
         else:
             rescale = rescale_nevents
 
@@ -346,7 +346,6 @@ if __name__ == "__main__":
             # weighted average
             tot_evts = sum(nevents)
             avg_wts = [nevts/tot_evts for nevts in nevents]
-            # histos = [safhisto(hist.obs, hist.bins, [xsec*avg_wt for xsec in hist.xsec]) for hist, avg_wt in zip(histos, avg_wts)]
             histos = [[safhisto(hist.obs, hist.bins, [xsec*avg_wt for xsec in hist.xsec]) for hist in hist_dir]
                       for hist_dir, avg_wt in zip(histos, avg_wts)]
 
