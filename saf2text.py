@@ -272,24 +272,6 @@ def event_weight(args, path):
 
 
 # main methods
-def main(inputs, event_wt, rebin, fb):
-    # get safs in list
-    safs = [readsaf(insaf) for insaf in inputs]
-
-    # this is the fuzzy logic, try and do stuff as normal, however call
-    # program exit if there are no valid inputs
-    try:
-        # get nested list of all histograms
-        all_histos = map(partial(saf2hist, event_wt=event_wt, rebin=rebin, fb=fb), safs)
-        # transpose for reduce call
-        all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
-        # Add together histograms with like observables
-        histos = [reduce(add, hist) for hist in all_histos_tp]
-    except:
-        exit()
-
-    return histos
-
 def main_extended(inputs, event_wts, rebin, fb):
     safs = [readsaf(insaf) for insaf in inputs]
 
@@ -355,7 +337,10 @@ if __name__ == "__main__":
     else:
         inputs = [Path(path) for path in args.input if Path(path).exists()]
         ninputs = len(inputs)
-        histos = main(inputs, args.xsec/args.nevents, args.rebin, args.fb)
+        histos = main_extended(inputs, args.xsec/args.nevents, args.rebin, args.fb)
+
+        histos_tp = list(map(lambda *sl : list(sl), *histos))
+        histos = [reduce(add, hist) for hist in histos_tp]
 
         if args.avg:
             histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
