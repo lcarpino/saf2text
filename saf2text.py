@@ -92,16 +92,16 @@ class safhisto(namedtuple("saf_histogram", "obs bins xsec")):
 
 # routines to process saf files and return safhisto objects
 # containing the data in plaintext
-def histo(histtree, sigma, nevents, rebin, fb):
+def histo(hist_tree, event_wt, rebin, fb):
     """"""
-    des, stat, dat = histtree
+    des, stat, dat = hist_tree
 
     obs_name, bins, binsize = description(des)
     stat = statistics(stat)
     uflow, bdata, oflow = data(dat)
 
     # rescale bdata
-    rescale = sigma/nevents
+    rescale = event_wt
     if rebin:
         rescale = rescale / binsize
     if fb:
@@ -255,51 +255,67 @@ def readsaf(input):
         saf = f.read()
     return ET.fromstring("<root>" + saf + "</root>")
 
-def saf2hist(saf, sigma, nevents, rebin, fb):
+def saf2hist(saf, event_wt, rebin, fb):
     """takes a well formatted saf from readsaf and converts it into the
     appropriate histograms"""
     histlist = []
     for enum, hist_elem in enumerate([elem for elem in saf if elem.tag == "Histo"]):
-        histlist.append(histo(hist_elem, sigma, nevents, rebin, fb))
+        histlist.append(histo(hist_elem, event_wt, rebin, fb))
     return histlist
 
+def event_weight(args, path):
+
+    regions = region_selection(path)
+    nentries, wt, wt2 = cutflow
+
+
+# main methods
+def main(inputs, event_wt, rebin, fb):
+    # get safs in list
+    safs = [readsaf(insaf) for insaf in inputs]
+
+    # this is the fuzzy logic, try and do stuff as normal, however call
+    # program exit if there are no valid inputs
+    try:
+        # get nested list of all histograms
+        all_histos = map(partial(saf2hist, event_wt=event_wt, rebin=rebin, fb=fb), safs)
+        # transpose for reduce call
+        all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
+        # Add together histograms with like observables
+        histos = [reduce(add, hist) for hist in all_histos_tp]
+    except:
+        exit()
+
+    return histos
+
+def main_extended(args):
+
+    histo_safs = []
+    region_safs = []
+    cutflow_safs = []
+
+    return []
 
 if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # # process inputs, it will let you choose paths that don't exist and
-    # # continue quietly
-    # inputs = [Path(path) for path in args.input if Path(path).exists()]
-    # ninputs = len(inputs)
+    # process inputs, it will let you choose paths that don't exist and
+    # continue quietly
+    if args.extended:
+        inputs = [Path(path) for path in args.input if Path(path).exists()]
+        # process to check
+        ninputs = len(inputs)
+        # histos = main_extended(args)
+        pass
+    else:
+        inputs = [Path(path) for path in args.input if Path(path).exists()]
+        ninputs = len(inputs)
+        histos = main(inputs, args.xsec/args.nevents, args.rebin, args.fb)
 
-    # # get safs in list
-    # safs = [readsaf(insaf) for insaf in inputs]
+    if args.avg:
+        histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
 
-    # # this is the fuzzy logic, try and do stuff as normal, however call
-    # # program exit if there are no valid inputs
-    # try:
-    #     # get nested list of all histograms
-    #     all_histos = map(partial(saf2hist, sigma=args.xsec, nevents=args.nevents, rebin=args.rebin, fb=args.fb), safs)
-    #     # transpose for reduce call
-    #     all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
-    #     # Add together histograms with like observables
-    #     histos = [reduce(add, hist) for hist in all_histos_tp]
-    # except:
-    #     exit()
-
-    # if args.avg:
-    #     histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
-
-    # for hist in histos:
-    #     with open(str(args.output) + "-" + hist.obs, "w") as f:
-    #         f.write(str(hist))
-
-    gl, rs, cf, h = handle_ma5_out(Path("/home/luke/Documents/Physics/Research/saf2text/0001"))
-
-    global_info(gl)
-    region_selection(rs)
-    print(list(region_selection(rs)))
-    cutflow(cf[0])
-
-    pass
+    for hist in histos:
+        with open(str(args.output) + "-" + hist.obs, "w") as f:
+            f.write(str(hist))
