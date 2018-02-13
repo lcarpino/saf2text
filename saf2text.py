@@ -3,6 +3,7 @@
 from collections import namedtuple
 from operator import add, sub
 from functools import partial, reduce
+import itertools
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import argparse
@@ -216,7 +217,7 @@ def global_info(path):
     sample_titles = sample_info[0]
     sample_data = map(lambda x, y : x(y), [float, float, int, float, float], sample_info[1])
 
-    xsec, xsec_err, nevents, sum_poswt, sum_negwt = list(sample_data)
+    xsec, xsec_err, nevents, sum_poswt, sum_negwt = sample_data
 
     return xsec, xsec_err, nevents, sum_poswt, sum_negwt
 
@@ -233,7 +234,7 @@ def cutflow(path):
 
     saf_header, initial_counter, *counters, saf_footer = cutflow 
     title, *initial_data = initial_counter.text.strip().split("\n")
-    
+
     title = title.split('#')[0].strip().strip("\"")
 
     nentries, wt, wt2 = map(lambda x : x.split("#")[0].split(), initial_data)
@@ -241,7 +242,7 @@ def cutflow(path):
     wt = map(float, wt)
     wt2 = map(float, wt2)
 
-    num_poswt, num_negwt = nentries
+    # num_poswt, num_negwt = nentries
 
     return nentries, wt, wt2
 
@@ -288,13 +289,24 @@ def main(inputs, event_wt, rebin, fb):
 
     return histos
 
-def main_extended(args):
+def main_extended(inputs, event_wts, rebin, fb):
+    # get safs in list
+    safs = [readsaf(insaf) for insaf in inputs]
 
-    histo_safs = []
-    region_safs = []
-    cutflow_safs = []
+    # this is the fuzzy logic, try and do stuff as normal, however call
+    # program exit if there are no valid inputs
+    try:
+        # get nested list of all histograms
+        fns = map(lambda it : partial(saf2hist, event_wt=it, rebin=rebin, fb=fb), event_wts)
+        all_histos = map(lambda x, y: x(y) , fns, safs)
+        # transpose for reduce call
+        all_histos_tp = list(map(lambda *sl : list(sl), *all_histos))
+        # Add together histograms with like observables
+        histos = [reduce(add, hist) for hist in all_histos_tp]
+    except:
+        exit()
 
-    return []
+    return histos
 
 if __name__ == "__main__":
 
@@ -304,17 +316,36 @@ if __name__ == "__main__":
     # continue quietly
     if args.extended:
         inputs = [Path(path) for path in args.input if Path(path).exists()]
-        # process to check
         ninputs = len(inputs)
-        # histos = main_extended(args)
-        pass
+
+        # process to check
+        gi, rs, cfs, hist = zip(*map(handle_ma5_out, inputs))
+
+        xsec, xsec_err, nevents, sum_poswt, sum_negwt = zip(*map(global_info, gi))
+        region_names = map(region_selection, rs)
+        first_region = itertools.starmap(lambda first, *args : first, region_names)
+        cutflow_sample = map(lambda r, cf : next(filter(lambda p : p.stem == r, cf)), first_region, cfs) 
+        nentries, wt, wt2 = zip(*map(cutflow, cutflow_sample))
+
+        net_nevents = map(lambda it : reduce(sub, it), nentries)
+        rescale_nevents = [0.0 if den == 0.0 else num/den for num, den in zip(nevents, net_nevents)]
+        rescale = [xsec/nevents*scale for xsec, nevents, scale in zip(xsec, nevents, rescale_nevents)]
+
+        histos = main_extended(hist, rescale, args.rebin, args.fb)
+
+        if args.avg:
+            # weighted average
+            tot_evts = sum(nevents)
+            avg_wts = [nevts/tot_evts for nevts in nevents]
+            # histos = [safhisto(hist.obs, hist.bins, [xsec*avg_wt for xsec in hist.xsec]) for hist, avg_wt in zip(histos, avg_wts)]
+
     else:
         inputs = [Path(path) for path in args.input if Path(path).exists()]
         ninputs = len(inputs)
         histos = main(inputs, args.xsec/args.nevents, args.rebin, args.fb)
 
-    if args.avg:
-        histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
+        if args.avg:
+            histos = [safhisto(obs, bins, [x/ninputs for x in xsec]) for obs, bins, xsec in histos]
 
     for hist in histos:
         with open(str(args.output) + "-" + hist.obs, "w") as f:
